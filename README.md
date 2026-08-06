@@ -27,25 +27,27 @@
 语义分割学习/
 ├── README.md
 ├── Oxford-IIIT Pet数据集/
-│   ├── code.ipynb                 # 主 Notebook
+│   ├── code.ipynb
 │   └── data/
-│       ├── images/                # 宠物 RGB 图像（已包含）
+│       ├── images/
 │       └── annotations/
-│           ├── trimaps/           # 三分割标注（前景/背景/边界）
-│           └── xmls/              # 原始 XML 标注
+│           ├── trimaps/
+│           └── xmls/
 ├── Pascal VOC 2012数据集/
 │   ├── code.ipynb
 │   └── data/
-│       ├── splits/                # 官方 train / val / trainval 划分
-│       │   ├── train.txt          # 1464 张
-│       │   ├── val.txt            # 1449 张
-│       │   └── trainval.txt       # 2913 张
-│       ├── images/                # 需自行下载
-│       └── masks/                 # 需自行下载
+│       ├── splits/
+│       │   ├── train.txt
+│       │   ├── val.txt
+│       │   └── trainval.txt
+│       ├── images/
+│       └── masks/
 └── Cityscapes数据集/
-    └── code.ipynb                 # 数据集需自行下载并修改路径
+    ├── code.ipynb
+    └── data/
+        ├── images/
+        └── gtFine/
 ```
-
 ---
 
 ## 环境配置
@@ -150,13 +152,6 @@ Oxford-IIIT Pet  →  Pascal VOC 2012  →  Cityscapes
 
 - 验证集 Pixel Accuracy ≈ **88.5%**
 
-**运行方式**
-
-```bash
-cd "Oxford-IIIT Pet数据集"
-jupyter notebook code.ipynb
-```
-
 ---
 
 ### 2. Pascal VOC 2012（进阶）
@@ -236,10 +231,10 @@ data/
 - Notebook 中默认使用 Kaggle 路径，**本地运行需修改**：
 
 ```python
-TRAIN_IMG_DIR  = "path/to/images/train"
-TRAIN_MASK_DIR = "path/to/gtFine/train"
-VAL_IMG_DIR    = "path/to/images/val"
-VAL_MASK_DIR   = "path/to/gtFine/val"
+TRAIN_IMG_DIR  = "data/images/train"
+TRAIN_MASK_DIR = "data/gtFine/train"
+VAL_IMG_DIR    = "data/images/val"
+VAL_MASK_DIR   = "data/gtFine/val"
 ```
 
 Mask 文件命名规则：将 `_leftImg8bit.png` 替换为 `_gtFine_labelTrainIds.png`。
