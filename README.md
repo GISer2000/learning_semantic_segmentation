@@ -43,7 +43,8 @@
 │       ├── images/
 │       └── masks/
 └── Cityscapes数据集/
-    ├── code.ipynb
+    ├── DeepLabv3plus.ipynb
+    ├── SegFormer.ipynb
     └── data/
         ├── images/
         └── gtFine/
@@ -75,7 +76,7 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 pip install numpy matplotlib pillow tqdm opencv-python albumentations jupyter
 ```
 
-> **说明**：Cityscapes 子项目额外依赖 `albumentations` 与 `opencv-python`；Oxford Pet 与 Pascal VOC 主要使用 `torchvision`。
+> **说明**：Cityscapes 子项目额外依赖 `albumentations` 、`segmentation_models_pytorch` 和 `opencv-python`；Oxford Pet 与 Pascal VOC 主要使用 `torchvision`。
 
 ### 验证 GPU
 
@@ -101,7 +102,7 @@ Oxford-IIIT Pet  →  Pascal VOC 2012  →  Cityscapes
 |------|----------|
 | **Pet** | `Dataset` 编写、标签映射、U-Net 结构、训练循环 |
 | **VOC** | 多类别分割、`ignore_index`、混淆矩阵与 mIoU |
-| **Cityscapes** | 预训练骨干网络、ASPP、分层学习率、混合精度训练 |
+| **Cityscapes** | 预训练骨干网络、ResNet-50、ViT、分层学习率、混合精度训练 |
 
 ---
 
@@ -239,7 +240,7 @@ VAL_MASK_DIR   = "data/gtFine/val"
 
 Mask 文件命名规则：将 `_leftImg8bit.png` 替换为 `_gtFine_labelTrainIds.png`。
 
-**模型**：DeepLabV3+
+#### **模型**：DeepLabV3+
 
 | 组件 | 说明 |
 |------|------|
@@ -288,6 +289,55 @@ Mask 文件命名规则：将 `_leftImg8bit.png` 替换为 `_gtFine_labelTrainId
 5. 混合精度训练
 6. 19 类调色板可视化与预测对比
 
+#### **模型**: SegFormer
+
+| 组件 | 说明 |
+|------|------|
+| Backbone | MiT‑B5（ImageNet‑1K 预训练），Transformer 分层编码器，输出多尺度特征图 |
+| MLP Decoder | 轻量级多层感知机解码器，聚合多尺度 Transformer 特征，无需位置编码 |
+| DecoderHead | 将多尺度特征拼接融合，上采样至输入分辨率 |
+| 输出 | 19 类逐像素 logits |
+
+**训练配置**
+
+| 参数 | 值 |
+|------|-----|
+| 输入尺寸 | 512 × 512 |
+| Batch Size | 8 |
+| Epochs | 25 |
+| 损失函数 | CrossEntropyLoss(ignore_index=255) |
+| 优化器 | AdamW（分层学习率） |
+| 学习率 | Backbone: 2e‑5，DecoderHead: 3e‑4 |
+| 学习率调度 | Poly LR：`(1 - step/max_iters)^0.9` |
+| 混合精度 | `torch.amp.GradScaler` |
+| 评估指标 | Loss、mIoU、Pixel Accuracy |
+
+**数据增强**（Albumentations）
+
+- RandomScale + RandomCrop
+- HorizontalFlip
+- ColorJitter、RandomBrightnessContrast
+- GaussianBlur（低概率）
+
+**训练策略**
+
+- 初始阶段 **冻结 MiT‑B5 骨干**，仅训练 MLP Decoder 与 DecoderHead
+- 提供 `unfreeze_backbone()` 接口用于后续全网络微调
+
+**参考结果**（30 epoch，512×512）
+
+- 验证集 mIoU ≈ **43.0%**
+- 验证集 Pixel Accuracy ≈ **73.0%**
+
+**Notebook 主要内容**
+
+1. `CityscapesDataset` 与城市目录遍历
+2. Albumentations 增强流水线
+3. SegFormer 完整实现（MiT‑B5 编码器 + MLP 轻量解码器）
+4. 分层优化器与 Poly LR
+5. 混合精度训练
+6. 19 类调色板可视化与预测对比
+
 ---
 
 ## 核心概念
@@ -300,22 +350,6 @@ Mask 文件命名规则：将 `_leftImg8bit.png` 替换为 `_gtFine_labelTrainId
 | 目标检测 | 边界框 + 类别 | 框出猫的位置 |
 | **语义分割** | **每个像素的类别** | 逐像素标注猫/背景 |
 | 实例分割 | 区分同类不同个体 | 猫 A、猫 B 分开 |
-
-### U-Net 架构
-
-```
-输入图像
-   ↓
-[Encoder: 逐层下采样，提取语义特征]
-   ↓
-[Bottleneck: 最深层特征]
-   ↓
-[Decoder: 逐层上采样 + Skip Connection 融合细节]
-   ↓
-1×1 Conv → 逐像素类别预测
-```
-
-Skip Connection 将 Encoder 同尺度特征拼接到 Decoder，帮助恢复边界与细节。
 
 ### 评估指标
 
@@ -394,10 +428,20 @@ model.eval()
 
 ### 论文
 
-- [U-Net: Convolutional Networks for Biomedical Image Segmentation (2015)](https://arxiv.org/abs/1505.04597)
-- [Encoder-Decoder with Atrous Separable Convolution (DeepLabV3+) (2018)](https://arxiv.org/abs/1802.02611)
-- [The PASCAL Visual Object Classes Challenge (VOC2012)](http://host.robots.ox.ac.uk/pascal/VOC/voc2012/)
-- [The Cityscapes Dataset for Semantic Urban Scene Understanding (2016)](https://arxiv.org/abs/1604.01685)
+- [PyTorch](https://pytorch.org/docs/stable/index.html)
+- [torchvision.transforms.functional](https://pytorch.org/vision/stable/transforms.html)
+- [Albumentations](https://albumentations.ai/docs/)
+- [SegFormer Paper(arXiv)](https://arxiv.org/abs/2105.15203)
+- [SegFormer Official GitHub(NVlabs)](https://github.com/NVlabs/SegFormer)
+- [HuggingFace Transformers SegFormer API文档](https://huggingface.co/docs/transformers/model_doc/segformer)
+- [MiT‑B5 预训练权重(HuggingFace‑Cityscapes)](https://huggingface.co/nvidia/segformer‑b5‑finetuned‑cityscapes‑1024‑1024)
+- [MMSegmentation SegFormer配置与文档](https://github.com/open‑mmlab/mmsegmentation/tree/main/configs/segformer)
+- [U‑Net Paper(MICCAI2015)](https://arxiv.org/abs/1505.04597)
+- [U‑Net PyTorch社区实现](https://github.com/milesial/Pytorch‑UNet)
+- [DeepLabV3+ Paper(ECCV2018)](https://arxiv.org/abs/1802.02611)
+- [DeepLabV3+ PyTorch实现](https://github.com/VainF/DeepLabV3Plus‑Pytorch)
+- [MMSegmentation DeepLabV3+配置](https://github.com/open‑mmlab/mmsegmentation/tree/main/configs/deeplabv3plus)
+- [MMSegmentation U‑Net配置](https://github.com/open‑mmlab/mmsegmentation/tree/main/configs/unet)
 
 ### 数据集链接
 
@@ -412,16 +456,6 @@ model.eval()
 - [PyTorch](https://pytorch.org/docs/stable/index.html)
 - [torchvision.transforms.functional](https://pytorch.org/vision/stable/transforms.html)
 - [Albumentations](https://albumentations.ai/docs/)
-
----
-
-## 后续扩展方向
-
-- 使用 ResNet / EfficientNet 作为 U-Net 的 Encoder（预训练迁移学习）
-- 尝试 FCN、PSPNet、SegFormer 等其他架构
-- 引入 Dice Loss、Focal Loss 等处理类别不均衡
-- 使用 TensorBoard 或 wandb 记录实验
-- 导出 ONNX / TorchScript 进行部署推理
 
 ---
 
